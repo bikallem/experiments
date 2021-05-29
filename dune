@@ -1,3 +1,8 @@
 (executable
  (name stream)
+ (modules stream)
  (libraries streaming))
+
+(executable
+ (name parser)
+ (modules parser))
