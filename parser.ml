@@ -16,6 +16,10 @@ module type P = sig
   type 'a io
 
   val parse : channel -> 'a t -> 'a io
+
+  (** {2 Parsers} *)
+
+  val next : char t
 end
 
 module Make (Io : IO) :
@@ -25,14 +29,24 @@ module Make (Io : IO) :
   type 'a io = 'a Io.t
 
   type state =
-    { io : channel
+    { channel : channel
     ; buf : bytes
-    ; mutable pos : int
+    ; mutable buf_pos : int
     }
 
-  type 'a t = state -> 'a
+  type 'a t = state -> 'a io
 
   let parse (_channel : channel) (_p : 'a t) = assert false
+
+  let rec next state =
+    let buf_pos = state.buf_pos + 1 in
+    if buf_pos >= Bytes.length state.buf then
+      refill state
+    else
+      state.buf_pos <- buf_pos;
+    Io.return (Bytes.unsafe_get state.buf state.buf_pos)
+
+  and refill _state = ()
 end
 
 module String_parser = Make (struct
@@ -43,8 +57,7 @@ module String_parser = Make (struct
   let return a = a
 
   let read channel b ~len =
-    let s = String.sub channel 0 len in
-    Bytes.blit_string s 0 b 0 len;
+    String.blit channel 0 b 0 len;
     len
 end)
 
