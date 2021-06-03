@@ -1,72 +1,74 @@
 module type IO = sig
-  type 'a t
+  type 'a promise
 
-  type channel
+  type t
 
-  val return : 'a -> 'a t
+  val return : 'a -> 'a promise
 
-  val read : channel -> bytes -> len:int -> int t
+  val read_into : t -> bytes -> int -> int promise
 end
 
 module type P = sig
   type 'a t
 
-  type channel
+  type 'a promise
 
-  type 'a io
+  type input
 
-  val parse : channel -> 'a t -> 'a io
+  val parse : input -> 'a t -> ('a, string) result promise
 
   (** {2 Parsers} *)
 
-  val next : char t
+  val char : char -> char t
 end
 
 module Make (Io : IO) :
-  P with type 'a io = 'a Io.t with type channel = Io.channel = struct
-  type channel = Io.channel
-
-  type 'a io = 'a Io.t
-
-  type state =
-    { channel : channel
+  P with type 'a promise := 'a Io.promise with type input := Io.t = struct
+  type input_buffer =
+    { input : Io.t
     ; buf : bytes
-    ; mutable buf_pos : int
+    ; mutable pos : int
     }
 
-  type 'a t = state -> 'a io
+  type 'a result = ('a, string) Result.t
 
-  let parse (_channel : channel) (_p : 'a t) = assert false
+  type 'a t =
+       input_buffer
+    -> succ:('a -> 'a result Io.promise)
+    -> fail:(string -> 'a result Io.promise)
+    -> 'a result Io.promise
 
-  let rec next state =
-    let buf_pos = state.buf_pos + 1 in
-    if buf_pos >= Bytes.length state.buf then
-      refill state
-    else
-      state.buf_pos <- buf_pos;
-    Io.return (Bytes.unsafe_get state.buf state.buf_pos)
+  let parse (input : Io.t) (p : 'a t) =
+    let ib = { input; buf = Bytes.create 0; pos = 0 } in
+    p ib ~succ:(fun a -> Io.return (Ok a)) ~fail:(fun e -> Io.return (Error e))
 
-  and refill _state = ()
+  let char : char -> char t =
+   fun c pb ~succ ~fail ->
+    if Bytes.unsafe_get pb.buf pb.pos = c then (
+      pb.pos <- pb.pos + 1;
+      succ c
+    ) else
+      fail (Printf.sprintf "char %C" c)
 end
 
 module String_parser = Make (struct
-  type 'a t = 'a
+  type 'a promise = 'a
 
-  type channel = string
+  type t = string
 
   let return a = a
 
-  let read channel b ~len =
-    String.blit channel 0 b 0 len;
+  let read_into t buf len =
+    String.blit t 0 buf 0 len;
     len
 end)
 
 module Lwt_parser = Make (struct
-  type 'a t = 'a Lwt.t
+  type 'a promise = 'a Lwt.t
 
-  type channel = Lwt_io.input_channel
+  type t = Lwt_io.input_channel
 
   let return = Lwt.return
 
-  let read channel bytes ~len = Lwt_io.read_into channel bytes 0 len
+  let read_into t buf len = Lwt_io.read_into t buf 0 len
 end)
