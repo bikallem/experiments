@@ -1,9 +1,11 @@
 module type IO = sig
-  type 'a promise
-
   type t
 
+  type 'a promise
+
   val return : 'a -> 'a promise
+
+  val bind : 'a promise -> ('a -> 'b promise) -> 'b promise
 
   val read_into : t -> bytes -> int -> int promise
 end
@@ -38,17 +40,39 @@ module Make (Io : IO) :
     -> fail:(string -> 'a result Io.promise)
     -> 'a result Io.promise
 
+  let bind : 'a t -> ('a -> 'b t) -> 'b t =
+   fun p f ib ~succ ~fail -> p ib ~succ:(fun a -> f a ib ~succ ~fail) ~fail
+
+  let ( >>= ) = bind
+
+  let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
+
   let parse (input : Io.t) (p : 'a t) =
     let ib = { input; buf = Bytes.create 0; pos = 0 } in
     p ib ~succ:(fun a -> Io.return (Ok a)) ~fail:(fun e -> Io.return (Error e))
 
+  let ensure_input : int -> unit t =
+   fun n ib ~succ ~fail ->
+    if n + ib.pos <= Bytes.length ib.buf then
+      succ ()
+    else
+      Io.bind (Io.read_into ib.input ib.buf n) (fun n ->
+          if Int.equal n 0 then
+            fail "not enough input"
+          else
+            succ ())
+
   let char : char -> char t =
-   fun c pb ~succ ~fail ->
-    if Bytes.unsafe_get pb.buf pb.pos = c then (
-      pb.pos <- pb.pos + 1;
-      succ c
-    ) else
-      fail (Printf.sprintf "char %C" c)
+   fun c ->
+    let p : char t =
+     fun ib ~succ ~fail ->
+      if Bytes.unsafe_get ib.buf ib.pos = c then (
+        ib.pos <- ib.pos + 1;
+        succ c
+      ) else
+        fail (Printf.sprintf "char %C" c)
+    in
+    ensure_input 1 *> p
 end
 
 module String_parser = Make (struct
@@ -57,6 +81,8 @@ module String_parser = Make (struct
   type t = string
 
   let return a = a
+
+  let bind promise f = f promise
 
   let read_into t buf len =
     String.blit t 0 buf 0 len;
@@ -69,6 +95,8 @@ module Lwt_parser = Make (struct
   type t = Lwt_io.input_channel
 
   let return = Lwt.return
+
+  let bind = Lwt.bind
 
   let read_into t buf len = Lwt_io.read_into t buf 0 len
 end)
