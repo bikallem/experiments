@@ -8,7 +8,7 @@ module type IO = sig
   val read_into : t -> bytes -> int -> int promise
 end
 
-module type P = sig
+module type PARSER = sig
   type 'a t
 
   type 'a promise
@@ -23,7 +23,7 @@ module type P = sig
 end
 
 module Make (Io : IO) :
-  P with type 'a promise := 'a Io.promise with type input := Io.t = struct
+  PARSER with type 'a promise := 'a Io.promise with type input := Io.t = struct
   type input_buffer =
     { input : Io.t
     ; buf : bytes
