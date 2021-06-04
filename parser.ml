@@ -340,14 +340,15 @@ struct
   let all : 'a t list -> 'a list t =
    fun parsers inp ~pos ~succ ~fail ->
     let items = ref [] in
-    let rec loop pos' = function
-      | [] -> succ ~pos:pos' (List.rev !items)
+    let rec loop pos = function
+      | [] -> succ ~pos (List.rev !items)
       | p :: parsers ->
-        p inp ~pos:pos'
+        p inp ~pos
           ~succ:(fun ~pos a ->
             items := a :: !items;
             (loop [@tailcall]) pos parsers)
-          ~fail:(fun ~pos:pos'' e -> fail ~pos:pos'' e)
+          ~fail:(fun ~pos e ->
+            fail ~pos (Format.sprintf "[all] one of the parsers failed: %s" e))
     in
     loop pos parsers
 
