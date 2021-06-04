@@ -17,7 +17,7 @@ module type PARSER = sig
 
   type input
 
-  val parse : input -> 'a t -> 'a promise
+  val parse : input -> 'a t -> ('a, string) result promise
 
   (** {2 Parsers} *)
 
@@ -31,8 +31,6 @@ module Make (Io : IO) :
     ; buf : bytes
     ; mutable pos : int
     }
-
-  type 'a result = ('a, string) Result.t
 
   type 'a t =
        input_buffer
@@ -49,15 +47,12 @@ module Make (Io : IO) :
 
   let parse (input : Io.t) (p : 'a t) =
     let ib = { input; buf = Bytes.create 0; pos = 0 } in
-    let v = ref None in
+    let v = ref (Error "") in
     Io.bind
       (p ib
-         ~succ:(fun a -> Io.return (v := Some a))
-         ~fail:(fun e -> failwith e))
-      (fun () ->
-        match !v with
-        | Some v -> Io.return v
-        | None -> assert false)
+         ~succ:(fun a -> Io.return (v := Ok a))
+         ~fail:(fun e -> Io.return (v := Error e)))
+      (fun () -> Io.return !v)
 
   let ensure_input : int -> unit t =
    fun n ib ~succ ~fail ->
