@@ -102,6 +102,8 @@ module type PARSER = sig
   val char_if : (char -> bool) -> char t
 
   val string : ?case_sensitive:bool -> string -> string t
+
+  val string_of_chars : char list -> string t
 end
 
 module Make (Input : INPUT) :
@@ -245,6 +247,8 @@ struct
       succ ~pos:(pos + len) s
     else
       fail ~pos (Printf.sprintf "[string] %S" s)
+
+  let string_of_chars chars = return (String.of_seq @@ List.to_seq chars)
 end
 
 module String_parser = Make (struct
