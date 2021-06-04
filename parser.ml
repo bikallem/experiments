@@ -98,6 +98,8 @@ module type PARSER = sig
   val peek_string : int -> string t
 
   val char : char -> char t
+
+  val char_if : (char -> bool) -> char t
 end
 
 module Make (Input : INPUT) :
@@ -221,6 +223,15 @@ struct
     else
       fail ~pos
         (Printf.sprintf "[char] pos: %d, expected %C, got %C" pos c s.[0])
+
+  let char_if f =
+    input 1
+    >>= fun s _ ~pos ~succ ~fail ->
+    let c = s.[0] in
+    if f c then
+      succ ~pos:(pos + 1) c
+    else
+      fail ~pos (Printf.sprintf "[char_if] pos:%d %C" pos s.[0])
 end
 
 module String_parser = Make (struct
