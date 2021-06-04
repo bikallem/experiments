@@ -73,11 +73,9 @@ module Make (Io : IO) :
     if n + ib.pos <= Bytes.length ib.buf then
       succ ()
     else
-      Io.bind (Io.read_into ib.input ib.buf n) (fun n ->
-          if Int.equal n 0 then
-            fail "not enough input"
-          else
-            succ ())
+      Io.bind (Io.read_into ib.input ib.buf n) (function
+        | x when Int.equal x n -> succ ()
+        | _ -> fail "not enough input")
 
   let char : char -> char t =
    fun c ->
