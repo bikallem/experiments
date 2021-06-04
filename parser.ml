@@ -113,6 +113,8 @@ module type PARSER = sig
   (** {2 Repetition} *)
 
   val recur : ('a t -> 'a t) -> 'a t
+
+  val all : 'a t list -> 'a list t
 end
 
 module Make (Input : INPUT) :
@@ -210,8 +212,10 @@ struct
     Input.string input ~pos ~len:n
     |> Input.bind (function
          | `String s when String.length s = n -> succ ~pos s
-         | `String _ -> fail ~pos "not enough input"
-         | `Eof -> fail ~pos "not enough input")
+         | `String _ ->
+           fail ~pos (Printf.sprintf "pos:%d, n:%d not enough input" pos n)
+         | `Eof ->
+           fail ~pos (Printf.sprintf "pos:%d, n:%d not enough input" pos n))
 
   (*+++++ Parsers ++++++*)
 
@@ -279,6 +283,20 @@ struct
   let recur f =
     let rec p inp ~pos ~succ ~fail = f p inp ~pos ~succ ~fail in
     p
+
+  let all : 'a t list -> 'a list t =
+   fun parsers inp ~pos ~succ ~fail ->
+    let items = ref [] in
+    let rec loop pos' = function
+      | [] -> succ ~pos:pos' (List.rev !items)
+      | p :: parsers ->
+        p inp ~pos:pos'
+          ~succ:(fun ~pos a ->
+            items := a :: !items;
+            (loop [@tailrec]) pos parsers)
+          ~fail:(fun ~pos:pos'' e -> fail ~pos:pos'' e)
+    in
+    loop pos parsers
 end
 
 module String_parser = Make (struct
@@ -293,7 +311,7 @@ module String_parser = Make (struct
   let length t = String.length t
 
   let string t ~pos ~len =
-    if pos + len < String.length t then
+    if pos + len <= String.length t then
       `String (String.sub t pos len)
     else
       `Eof
