@@ -1,4 +1,4 @@
-module type IO = sig
+module type INPUT = sig
   type t
 
   type 'a promise
@@ -34,19 +34,20 @@ module type PARSER = sig
   val char : char -> char t
 end
 
-module Make (Io : IO) :
-  PARSER with type 'a promise := 'a Io.promise with type input := Io.t = struct
+module Make (Input : INPUT) :
+  PARSER with type 'a promise := 'a Input.promise with type input := Input.t =
+struct
   type input_buffer =
-    { input : Io.t
+    { input : Input.t
     ; buf : bytes
     ; mutable pos : int
     }
 
   type 'a t =
        input_buffer
-    -> succ:('a -> unit Io.promise)
-    -> fail:(string -> unit Io.promise)
-    -> unit Io.promise
+    -> succ:('a -> unit Input.promise)
+    -> fail:(string -> unit Input.promise)
+    -> unit Input.promise
 
   let bind : 'a t -> ('a -> 'b t) -> 'b t =
    fun p f ib ~succ ~fail -> p ib ~succ:(fun a -> f a ib ~succ ~fail) ~fail
@@ -59,21 +60,21 @@ module Make (Io : IO) :
 
   include Infix
 
-  let parse (input : Io.t) (p : 'a t) =
+  let parse (input : Input.t) (p : 'a t) =
     let ib = { input; buf = Bytes.create 0; pos = 0 } in
     let v = ref (Error "") in
-    Io.bind
+    Input.bind
       (p ib
-         ~succ:(fun a -> Io.return (v := Ok a))
-         ~fail:(fun e -> Io.return (v := Error e)))
-      (fun () -> Io.return !v)
+         ~succ:(fun a -> Input.return (v := Ok a))
+         ~fail:(fun e -> Input.return (v := Error e)))
+      (fun () -> Input.return !v)
 
   let ensure_input : int -> unit t =
    fun n ib ~succ ~fail ->
     if n + ib.pos <= Bytes.length ib.buf then
       succ ()
     else
-      Io.bind (Io.read_into ib.input ib.buf n) (function
+      Input.bind (Input.read_into ib.input ib.buf n) (function
         | x when Int.equal x n -> succ ()
         | _ -> fail "not enough input")
 
