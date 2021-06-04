@@ -109,6 +109,10 @@ module type PARSER = sig
   val any : 'a t list -> 'a t
 
   val alt : 'a t -> 'a t -> 'a t
+
+  (** {2 Repetition} *)
+
+  val recur : ('a t -> 'a t) -> 'a t
 end
 
 module Make (Input : INPUT) :
@@ -269,6 +273,12 @@ struct
     loop parsers
 
   let alt = ( <|> )
+
+  (*+++++ Repetition +++++*)
+
+  let recur f =
+    let rec p inp ~pos ~succ ~fail = f p inp ~pos ~succ ~fail in
+    p
 end
 
 module String_parser = Make (struct
