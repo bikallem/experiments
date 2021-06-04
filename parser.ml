@@ -106,9 +106,12 @@ module type PARSER = sig
   val string_of_chars : char list -> string t
 
   (** {2 Alternate parsers} *)
+
   val any : 'a t list -> 'a t
 
   val alt : 'a t -> 'a t -> 'a t
+
+  val optional : 'a t -> 'a option t
 
   (** {2 Repetition} *)
 
@@ -117,6 +120,8 @@ module type PARSER = sig
   val all : 'a t list -> 'a list t
 
   val skip : ?at_least:int -> ?up_to:int -> _ t -> int t
+
+  val take : ?at_least:int -> ?up_to:int -> ?sep_by:_ t -> 'a t -> 'a list t
 end
 
 module Make (Input : INPUT) :
@@ -280,6 +285,12 @@ struct
 
   let alt = ( <|> )
 
+  let optional : 'a t -> 'a option t =
+   fun p inp ~pos ~succ ~fail:_ ->
+    p inp ~pos
+      ~succ:(fun ~pos a -> succ ~pos (Some a))
+      ~fail:(fun ~pos _ -> succ ~pos None)
+
   (*+++++ Repetition +++++*)
 
   let recur f =
@@ -308,7 +319,6 @@ struct
       invalid_arg "up_to"
     else
       ();
-
     let up_to = Option.value up_to ~default:(-1) in
     let rec loop pos skipped_count =
       if up_to = -1 || skipped_count < up_to then
@@ -323,6 +333,48 @@ struct
       else
         fail ~pos
           (Format.sprintf "[skip] skipped_count:%d at_least:%d" skipped_count
+             at_least)
+    in
+    loop pos 0
+
+  let take : ?at_least:int -> ?up_to:int -> ?sep_by:_ t -> 'a t -> 'a list t =
+   fun ?(at_least = 0) ?up_to ?sep_by p inp ~pos ~succ ~fail ->
+    if at_least < 0 then
+      invalid_arg "at_least"
+    else if Option.is_some up_to && Option.get up_to < 0 then
+      invalid_arg "up_to"
+    else
+      ();
+    let sep_by =
+      match sep_by with
+      | None -> return true
+      | Some sep_by -> (
+        optional sep_by
+        >>| function
+        | Some _ -> true
+        | None -> false)
+    in
+    let items = ref [] in
+    let up_to = Option.value ~default:(-1) up_to in
+    let rec loop pos taken_count =
+      if up_to = -1 || taken_count < up_to then
+        let p = map2 (fun v continue -> (v, continue)) p sep_by in
+        p inp ~pos
+          ~succ:(fun ~pos (a, continue) ->
+            items := a :: !items;
+            if continue then
+              (loop [@tailcall]) pos (taken_count + 1)
+            else
+              check taken_count pos)
+          ~fail:(fun ~pos _ -> check taken_count pos)
+      else
+        check taken_count pos
+    and check taken_count pos =
+      if taken_count >= at_least then
+        succ ~pos (List.rev !items)
+      else
+        fail ~pos
+          (Format.sprintf "[take] taken_count:%d at_least:%d" taken_count
              at_least)
     in
     loop pos 0
