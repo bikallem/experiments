@@ -70,7 +70,8 @@ struct
    fun n input ~pos ~succ ~fail ->
     Input.bind (Input.string input ~pos ~len:n) (function
       | `String s when String.length s = n -> succ ~pos s
-      | _ -> fail ~pos "not enough input")
+      | `String _ -> fail ~pos "not enough input"
+      | `Eof -> fail ~pos "not enough input")
 
   let char : char -> char t =
    fun c ->
