@@ -25,6 +25,13 @@ module type PARSER = sig
 
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  val map2 : ('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
+
+  val map3 : ('a -> 'b -> 'c -> 'd) -> 'a t -> 'b t -> 'c t -> 'd t
+
+  val map4 :
+    ('a -> 'b -> 'c -> 'd -> 'e) -> 'a t -> 'b t -> 'c t -> 'd t -> 'e t
+
   val parse : input -> 'a t -> ('a, string) result promise
 
   module Infix : sig
@@ -54,6 +61,31 @@ module type PARSER = sig
   end
 
   include module type of Infix
+
+  module Let_syntax : sig
+    val return : 'a -> 'a t
+
+    val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
+
+    val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+
+    module Let_syntax : sig
+      val return : 'a -> 'a t
+
+      val map : 'a t -> f:('a -> 'b) -> 'b t
+
+      val bind : 'a t -> f:('a -> 'b t) -> 'b t
+
+      val both : 'a t -> 'b t -> ('a * 'b) t
+
+      val map2 : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t
+
+      val map3 : 'a t -> 'b t -> 'c t -> f:('a -> 'b -> 'c -> 'd) -> 'd t
+
+      val map4 :
+        'a t -> 'b t -> 'c t -> 'd t -> f:('a -> 'b -> 'c -> 'd -> 'e) -> 'e t
+    end
+  end
 
   (** {2 Parsers} *)
 
@@ -110,6 +142,36 @@ struct
   end
 
   include Infix
+
+  let map2 f p q = return f <*> p <*> q
+
+  let map3 f p q r = return f <*> p <*> q <*> r
+
+  let map4 f p q r s = return f <*> p <*> q <*> r <*> s
+
+  module Let_syntax = struct
+    let return = return
+
+    let ( >>| ) = ( >>| )
+
+    let ( >>= ) = ( >>= )
+
+    module Let_syntax = struct
+      let return = return
+
+      let map p ~f = map f p
+
+      let bind p ~f = bind f p
+
+      let both = both
+
+      let map2 p q ~f = map2 f p q
+
+      let map3 p q r ~f = map3 f p q r
+
+      let map4 p q r s ~f = map4 f p q r s
+    end
+  end
 
   let parse (input : Input.t) (p : 'a t) =
     let v = ref (Error "") in
