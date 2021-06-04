@@ -97,6 +97,8 @@ module type PARSER = sig
 
   val peek_string : int -> string t
 
+  val next : char t
+
   val char : char -> char t
 
   val char_if : (char -> bool) -> char t
@@ -113,6 +115,13 @@ module type PARSER = sig
 
   val optional : 'a t -> 'a option t
 
+  (** {2 Boolean} *)
+  val not_ : 'a t -> unit t
+
+  val is : 'a t -> bool t
+
+  val is_not : 'a t -> bool t
+
   (** {2 Repetition} *)
 
   val recur : ('a t -> 'a t) -> 'a t
@@ -127,6 +136,8 @@ module type PARSER = sig
     ?sep_by:_ t -> while_:bool t -> on_take_cb:('a -> unit) -> 'a t -> int t
 
   val take_while : ?sep_by:_ t -> while_:bool t -> 'a t -> 'a list t
+
+  val take_between : ?sep_by:_ t -> start:_ t -> end_:_ t -> 'a t -> 'a list t
 end
 
 module Make (Input : INPUT) :
@@ -243,6 +254,9 @@ struct
 
   let peek_string : int -> string t = input
 
+  let next : char t =
+    input 1 >>= fun s _ ~pos ~succ ~fail:_ -> succ ~pos:(pos + 1) s.[0]
+
   let char : char -> char t =
    fun c ->
     input 1
@@ -295,6 +309,26 @@ struct
     p inp ~pos
       ~succ:(fun ~pos a -> succ ~pos (Some a))
       ~fail:(fun ~pos _ -> succ ~pos None)
+
+  (*+++++ Boolean +++++*)
+
+  let not_ : 'a t -> unit t =
+   fun p inp ~pos ~succ ~fail ->
+    p inp ~pos
+      ~succ:(fun ~pos:_ _ -> fail ~pos "[not_] expected failure but succeeded")
+      ~fail:(fun ~pos _ -> succ ~pos ())
+
+  let is : 'a t -> bool t =
+   fun p inp ~pos ~succ ~fail:_ ->
+    p inp ~pos
+      ~succ:(fun ~pos _ -> succ ~pos true)
+      ~fail:(fun ~pos _ -> succ ~pos false)
+
+  let is_not : 'a t -> bool t =
+   fun p inp ~pos ~succ ~fail:_ ->
+    p inp ~pos
+      ~succ:(fun ~pos:_ _ -> succ ~pos false)
+      ~fail:(fun ~pos:_ _ -> succ ~pos true)
 
   (*+++++ Repetition +++++*)
 
@@ -416,6 +450,10 @@ struct
       p inp ~pos
       ~succ:(fun ~pos _ -> succ ~pos (List.rev !items))
       ~fail
+
+  let take_between : ?sep_by:_ t -> start:_ t -> end_:_ t -> 'a t -> 'a list t =
+   fun ?sep_by ~start ~end_ p ->
+    start *> take_while ?sep_by ~while_:(is_not end_) p <* end_
 end
 
 module String_parser = Make (struct
