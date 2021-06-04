@@ -115,6 +115,8 @@ module type PARSER = sig
   val recur : ('a t -> 'a t) -> 'a t
 
   val all : 'a t list -> 'a list t
+
+  val skip : ?at_least:int -> ?up_to:int -> _ t -> int t
 end
 
 module Make (Input : INPUT) :
@@ -213,9 +215,9 @@ struct
     |> Input.bind (function
          | `String s when String.length s = n -> succ ~pos s
          | `String _ ->
-           fail ~pos (Printf.sprintf "pos:%d, n:%d not enough input" pos n)
+           fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)
          | `Eof ->
-           fail ~pos (Printf.sprintf "pos:%d, n:%d not enough input" pos n))
+           fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n))
 
   (*+++++ Parsers ++++++*)
 
@@ -239,7 +241,7 @@ struct
       succ ~pos:(pos + 1) c
     else
       fail ~pos
-        (Printf.sprintf "[char] pos: %d, expected %C, got %C" pos c s.[0])
+        (Format.sprintf "[char] pos: %d, expected %C, got %C" pos c s.[0])
 
   let char_if f =
     input 1
@@ -248,7 +250,7 @@ struct
     if f c then
       succ ~pos:(pos + 1) c
     else
-      fail ~pos (Printf.sprintf "[char_if] pos:%d %C" pos s.[0])
+      fail ~pos (Format.sprintf "[char_if] pos:%d %C" pos s.[0])
 
   let string ?(case_sensitive = true) s =
     let len = String.length s in
@@ -259,7 +261,7 @@ struct
     else if String.(equal (lowercase_ascii s) (lowercase_ascii s')) then
       succ ~pos:(pos + len) s
     else
-      fail ~pos (Printf.sprintf "[string] %S" s)
+      fail ~pos (Format.sprintf "[string] %S" s)
 
   let string_of_chars chars = return (String.of_seq @@ List.to_seq chars)
 
@@ -268,7 +270,7 @@ struct
   let any : 'a t list -> 'a t =
    fun parsers inp ~pos ~succ ~fail ->
     let rec loop = function
-      | [] -> fail ~pos (Printf.sprintf "[any] all parsers failed")
+      | [] -> fail ~pos (Format.sprintf "[any] all parsers failed")
       | p :: parsers ->
         p inp ~pos
           ~succ:(fun ~pos a -> succ ~pos a)
@@ -297,6 +299,33 @@ struct
           ~fail:(fun ~pos:pos'' e -> fail ~pos:pos'' e)
     in
     loop pos parsers
+
+  let skip : ?at_least:int -> ?up_to:int -> 'a t -> int t =
+   fun ?(at_least = 0) ?up_to p inp ~pos ~succ ~fail ->
+    if at_least < 0 then
+      invalid_arg "at_least"
+    else if Option.is_some up_to && Option.get up_to < 0 then
+      invalid_arg "up_to"
+    else
+      ();
+
+    let up_to = Option.value up_to ~default:(-1) in
+    let rec loop pos skipped_count =
+      if up_to = -1 || skipped_count < up_to then
+        p inp ~pos
+          ~succ:(fun ~pos _ -> (loop [@tailcall]) pos (skipped_count + 1))
+          ~fail:(fun ~pos _ -> check skipped_count pos)
+      else
+        check skipped_count pos
+    and check skipped_count pos =
+      if skipped_count >= at_least then
+        succ ~pos skipped_count
+      else
+        fail ~pos
+          (Format.sprintf "[skip] skipped_count:%d at_least:%d" skipped_count
+             at_least)
+    in
+    loop pos 0
 end
 
 module String_parser = Make (struct
