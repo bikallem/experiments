@@ -19,6 +19,16 @@ module type PARSER = sig
 
   val parse : input -> 'a t -> ('a, string) result promise
 
+  val bind : 'a t -> ('a -> 'b t) -> 'b t
+
+  module Infix : sig
+    val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+
+    val ( *> ) : _ t -> 'b t -> 'b t
+  end
+
+  include module type of Infix
+
   (** {2 Parsers} *)
 
   val char : char -> char t
@@ -41,9 +51,13 @@ module Make (Io : IO) :
   let bind : 'a t -> ('a -> 'b t) -> 'b t =
    fun p f ib ~succ ~fail -> p ib ~succ:(fun a -> f a ib ~succ ~fail) ~fail
 
-  let ( >>= ) = bind
+  module Infix = struct
+    let ( >>= ) = bind
 
-  let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
+    let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
+  end
+
+  include Infix
 
   let parse (input : Io.t) (p : 'a t) =
     let ib = { input; buf = Bytes.create 0; pos = 0 } in
