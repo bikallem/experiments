@@ -116,6 +116,7 @@ module type PARSER = sig
   val optional : 'a t -> 'a option t
 
   (** {2 Boolean} *)
+
   val not_ : 'a t -> unit t
 
   val is : 'a t -> bool t
