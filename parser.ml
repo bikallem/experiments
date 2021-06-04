@@ -122,6 +122,11 @@ module type PARSER = sig
   val skip : ?at_least:int -> ?up_to:int -> _ t -> int t
 
   val take : ?at_least:int -> ?up_to:int -> ?sep_by:_ t -> 'a t -> 'a list t
+
+  val take_while_cb :
+    ?sep_by:_ t -> while_:bool t -> on_take_cb:('a -> unit) -> 'a t -> int t
+
+  val take_while : ?sep_by:_ t -> while_:bool t -> 'a t -> 'a list t
 end
 
 module Make (Input : INPUT) :
@@ -279,7 +284,7 @@ struct
       | p :: parsers ->
         p inp ~pos
           ~succ:(fun ~pos a -> succ ~pos a)
-          ~fail:(fun ~pos:_ _ -> (loop [@tailrec]) parsers)
+          ~fail:(fun ~pos:_ _ -> (loop [@tailcall]) parsers)
     in
     loop parsers
 
@@ -306,7 +311,7 @@ struct
         p inp ~pos:pos'
           ~succ:(fun ~pos a ->
             items := a :: !items;
-            (loop [@tailrec]) pos parsers)
+            (loop [@tailcall]) pos parsers)
           ~fail:(fun ~pos:pos'' e -> fail ~pos:pos'' e)
     in
     loop pos parsers
@@ -337,6 +342,15 @@ struct
     in
     loop pos 0
 
+  let sep_by_to_bool ?sep_by =
+    match sep_by with
+    | None -> return true
+    | Some sep_by -> (
+      optional sep_by
+      >>| function
+      | Some _ -> true
+      | None -> false)
+
   let take : ?at_least:int -> ?up_to:int -> ?sep_by:_ t -> 'a t -> 'a list t =
    fun ?(at_least = 0) ?up_to ?sep_by p inp ~pos ~succ ~fail ->
     if at_least < 0 then
@@ -345,24 +359,16 @@ struct
       invalid_arg "up_to"
     else
       ();
-    let sep_by =
-      match sep_by with
-      | None -> return true
-      | Some sep_by -> (
-        optional sep_by
-        >>| function
-        | Some _ -> true
-        | None -> false)
-    in
+    let sep_by = sep_by_to_bool ?sep_by in
     let items = ref [] in
     let up_to = Option.value ~default:(-1) up_to in
     let rec loop pos taken_count =
       if up_to = -1 || taken_count < up_to then
-        let p = map2 (fun v continue -> (v, continue)) p sep_by in
+        let p = map2 (fun v sep_by_ok -> (v, sep_by_ok)) p sep_by in
         p inp ~pos
-          ~succ:(fun ~pos (a, continue) ->
+          ~succ:(fun ~pos (a, sep_by_ok) ->
             items := a :: !items;
-            if continue then
+            if sep_by_ok then
               (loop [@tailcall]) pos (taken_count + 1)
             else
               check taken_count pos)
@@ -378,6 +384,38 @@ struct
              at_least)
     in
     loop pos 0
+
+  let take_while_cb :
+      ?sep_by:_ t -> while_:bool t -> on_take_cb:('a -> unit) -> 'a t -> int t =
+   fun ?sep_by ~while_ ~on_take_cb p inp ~pos ~succ ~fail:_ ->
+    let sep_by = sep_by_to_bool ?sep_by in
+    let rec loop pos taken_count =
+      while_ inp ~pos
+        ~succ:(fun ~pos:_ continue ->
+          if continue then
+            let p = map2 (fun v sep_by_ok -> (v, sep_by_ok)) p sep_by in
+            p inp ~pos
+              ~succ:(fun ~pos (v, sep_by_ok) ->
+                on_take_cb v;
+                if sep_by_ok then
+                  (loop [@tailcall]) pos (taken_count + 1)
+                else
+                  succ ~pos taken_count)
+              ~fail:(fun ~pos _ -> succ ~pos taken_count)
+          else
+            succ ~pos taken_count)
+        ~fail:(fun ~pos:_ _ -> succ ~pos taken_count)
+    in
+    loop pos 0
+
+  let take_while : ?sep_by:_ t -> while_:bool t -> 'a t -> 'a list t =
+   fun ?sep_by ~while_ p inp ~pos ~succ ~fail ->
+    let items = ref [] in
+    take_while_cb ?sep_by ~while_
+      ~on_take_cb:(fun a -> items := a :: !items)
+      p inp ~pos
+      ~succ:(fun ~pos _ -> succ ~pos (List.rev !items))
+      ~fail
 end
 
 module String_parser = Make (struct
