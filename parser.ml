@@ -7,7 +7,7 @@ module type INPUT = sig
 
   val return : 'a -> 'a promise
 
-  val bind : 'a promise -> ('a -> 'b promise) -> 'b promise
+  val bind : ('a -> 'b promise) -> 'a promise -> 'b promise
 
   val string : t -> pos:int -> len:int -> [ `String of string | `Eof ] promise
 end
@@ -21,10 +21,14 @@ module type PARSER = sig
 
   val parse : input -> 'a t -> ('a, string) result promise
 
-  val bind : 'a t -> ('a -> 'b t) -> 'b t
+  val bind : ('a -> 'b t) -> 'a t -> 'b t
+
+  val map : ('a -> 'b) -> 'a t -> 'b t
 
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+
+    val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
 
     val ( *> ) : _ t -> 'b t -> 'b t
 
@@ -48,12 +52,16 @@ struct
     -> fail:(pos:int -> string -> unit Input.promise)
     -> unit Input.promise
 
-  let bind : 'a t -> ('a -> 'b t) -> 'b t =
-   fun p f ib ~pos ~succ ~fail ->
-    p ib ~pos ~succ:(fun ~pos a -> f a ib ~pos ~succ ~fail) ~fail
+  let bind f p input ~pos ~succ ~fail =
+    p input ~pos ~succ:(fun ~pos a -> f a input ~pos ~succ ~fail) ~fail
+
+  let map f p input ~pos ~succ ~fail =
+    p input ~pos ~succ:(fun ~pos a -> succ ~pos (f a)) ~fail
 
   module Infix = struct
-    let ( >>= ) = bind
+    let ( >>= ) p f = bind f p
+
+    let ( >>| ) p f = map f p
 
     let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
 
@@ -66,18 +74,18 @@ struct
 
   let parse (input : Input.t) (p : 'a t) =
     let v = ref (Error "") in
-    Input.bind
-      (p input ~pos:0
-         ~succ:(fun ~pos:_ a -> Input.return (v := Ok a))
-         ~fail:(fun ~pos:_ e -> Input.return (v := Error e)))
-      (fun () -> Input.return !v)
+    p input ~pos:0
+      ~succ:(fun ~pos:_ a -> Input.return (v := Ok a))
+      ~fail:(fun ~pos:_ e -> Input.return (v := Error e))
+    |> Input.bind (fun () -> Input.return !v)
 
   let input : int -> string t =
    fun n input ~pos ~succ ~fail ->
-    Input.bind (Input.string input ~pos ~len:n) (function
-      | `String s when String.length s = n -> succ ~pos s
-      | `String _ -> fail ~pos "not enough input"
-      | `Eof -> fail ~pos "not enough input")
+    Input.string input ~pos ~len:n
+    |> Input.bind (function
+         | `String s when String.length s = n -> succ ~pos s
+         | `String _ -> fail ~pos "not enough input"
+         | `Eof -> fail ~pos "not enough input")
 
   let char : char -> char t =
    fun c ->
@@ -97,7 +105,7 @@ module String_parser = Make (struct
 
   let return a = a
 
-  let bind promise f = f promise
+  let bind f promise = f promise
 
   let length t = String.length t
 
@@ -115,7 +123,7 @@ module Lwt_parser = Make (struct
 
   let return = Lwt.return
 
-  let bind = Lwt.bind
+  let bind f p = Lwt.bind p f
 
   let length _t = 0
 
