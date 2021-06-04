@@ -107,6 +107,8 @@ module type PARSER = sig
 
   (** {2 Alternate parsers} *)
   val any : 'a t list -> 'a t
+
+  val alt : 'a t -> 'a t -> 'a t
 end
 
 module Make (Input : INPUT) :
@@ -265,6 +267,8 @@ struct
           ~fail:(fun ~pos:_ _ -> (loop [@tailrec]) parsers)
     in
     loop parsers
+
+  let alt = ( <|> )
 end
 
 module String_parser = Make (struct
