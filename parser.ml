@@ -109,7 +109,7 @@ module type PARSER = sig
 
   (** {2 Alternate parsers} *)
 
-  val any : 'a t list -> 'a t
+  val any : ?failure_msg:string -> 'a t list -> 'a t
 
   val alt : 'a t -> 'a t -> 'a t
 
@@ -292,10 +292,16 @@ struct
 
   (*++++++ Alternates +++++*)
 
-  let any : 'a t list -> 'a t =
-   fun parsers inp ~pos ~succ ~fail ->
+  let any : ?failure_msg:string -> 'a t list -> 'a t =
+   fun ?failure_msg parsers inp ~pos ~succ ~fail ->
     let rec loop = function
-      | [] -> fail ~pos (Format.sprintf "[any] all parsers failed")
+      | [] ->
+        let failure_msg =
+          match failure_msg with
+          | Some msg -> msg
+          | None -> "[any] all parsers failed"
+        in
+        fail ~pos failure_msg
       | p :: parsers ->
         p inp ~pos
           ~succ:(fun ~pos a -> succ ~pos a)
