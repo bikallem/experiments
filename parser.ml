@@ -45,6 +45,8 @@ module type PARSER = sig
 
     val ( <$ ) : 'a -> 'b t -> 'a t
 
+    val ( $> ) : 'a t -> 'b -> 'b t
+
     val ( *> ) : _ t -> 'b t -> 'b t
 
     val ( <* ) : 'a t -> _ t -> 'a t
@@ -121,6 +123,8 @@ struct
     let ( <$> ) f p = return f <*> p
 
     let ( <$ ) v p = (fun _ -> v) <$> p
+
+    let ( $> ) p v = (fun _ -> v) <$> p
 
     let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
 
