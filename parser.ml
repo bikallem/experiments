@@ -79,7 +79,8 @@ struct
     if s.[0] = c then
       succ ~pos:(pos + 1) c
     else
-      fail ~pos (Printf.sprintf "char %C" c)
+      fail ~pos
+        (Printf.sprintf "[char] pos: %d, expected %C, got %C" pos c s.[0])
 end
 
 module String_parser = Make (struct
