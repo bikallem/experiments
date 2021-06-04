@@ -89,7 +89,7 @@ module type PARSER = sig
     end
   end
 
-  (** {2 Parsers} *)
+  (** {2 Char/String parsers} *)
 
   val peek_char : char t
 
@@ -104,6 +104,9 @@ module type PARSER = sig
   val string : ?case_sensitive:bool -> string -> string t
 
   val string_of_chars : char list -> string t
+
+  (** {2 Alternate parsers} *)
+  val any : 'a t list -> 'a t
 end
 
 module Make (Input : INPUT) :
@@ -249,6 +252,19 @@ struct
       fail ~pos (Printf.sprintf "[string] %S" s)
 
   let string_of_chars chars = return (String.of_seq @@ List.to_seq chars)
+
+  (*++++++ Alternates +++++*)
+
+  let any : 'a t list -> 'a t =
+   fun parsers inp ~pos ~succ ~fail ->
+    let rec loop = function
+      | [] -> fail ~pos (Printf.sprintf "[any] all parsers failed")
+      | p :: parsers ->
+        p inp ~pos
+          ~succ:(fun ~pos a -> succ ~pos a)
+          ~fail:(fun ~pos:_ _ -> (loop [@tailrec]) parsers)
+    in
+    loop parsers
 end
 
 module String_parser = Make (struct
