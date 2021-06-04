@@ -100,6 +100,8 @@ module type PARSER = sig
   val char : char -> char t
 
   val char_if : (char -> bool) -> char t
+
+  val string : ?case_sensitive:bool -> string -> string t
 end
 
 module Make (Input : INPUT) :
@@ -232,6 +234,17 @@ struct
       succ ~pos:(pos + 1) c
     else
       fail ~pos (Printf.sprintf "[char_if] pos:%d %C" pos s.[0])
+
+  let string ?(case_sensitive = true) s =
+    let len = String.length s in
+    input len
+    >>= fun s' _ ~pos ~succ ~fail ->
+    if case_sensitive && String.equal s s' then
+      succ ~pos:(pos + len) s
+    else if String.(equal (lowercase_ascii s) (lowercase_ascii s')) then
+      succ ~pos:(pos + len) s
+    else
+      fail ~pos (Printf.sprintf "[string] %S" s)
 end
 
 module String_parser = Make (struct
