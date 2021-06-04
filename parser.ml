@@ -97,7 +97,7 @@ module type PARSER = sig
 
   val peek_string : int -> string t
 
-  val next : char t
+  val any_char : char t
 
   val char : char -> char t
 
@@ -255,7 +255,7 @@ struct
 
   let peek_string : int -> string t = input
 
-  let next : char t =
+  let any_char : char t =
     input 1 >>= fun s _ ~pos ~succ ~fail:_ -> succ ~pos:(pos + 1) s.[0]
 
   let char : char -> char t =
