@@ -91,9 +91,7 @@ module type PARSER = sig
 
   (** {2 Parsers} *)
 
-  val peek_char : char option t
-
-  val peek_char_fail : char t
+  val peek_char : char t
 
   val peek_string : int -> string t
 
@@ -204,13 +202,7 @@ struct
 
   (*+++++ Parsers ++++++*)
 
-  let peek_char : char option t =
-   fun inp ~pos ~succ ~fail:_ ->
-    input 1 inp ~pos
-      ~succ:(fun ~pos c -> succ ~pos (Some c.[0]))
-      ~fail:(fun ~pos _ -> succ ~pos None)
-
-  let peek_char_fail : char t =
+  let peek_char : char t =
    fun inp ~pos ~succ ~fail ->
     input 1 inp ~pos ~succ:(fun ~pos s -> succ ~pos s.[0]) ~fail
 
