@@ -10,8 +10,6 @@ module type INPUT = sig
   val bind : 'a promise -> ('a -> 'b promise) -> 'b promise
 
   val string : t -> pos:int -> len:int -> [ `String of string | `Eof ] promise
-
-  val char : t -> pos:int -> [ `Char of char | `Eof ] promise
 end
 
 module type PARSER = sig
@@ -95,12 +93,6 @@ module String_parser = Make (struct
 
   let length t = String.length t
 
-  let char t ~pos =
-    if pos < String.length t then
-      `Char t.[pos]
-    else
-      `Eof
-
   let string t ~pos ~len =
     if pos + len < String.length t then
       `String (String.sub t pos len)
@@ -119,9 +111,5 @@ module Lwt_parser = Make (struct
 
   let length _t = 0
 
-  let char _t ~pos:_ = Lwt.return `Eof
-
   let string _t ~pos:_ ~len:_ = Lwt.return `Eof
-
-  (* let read_into t buf len = Lwt_io.read_into t buf 0 len *)
 end)
