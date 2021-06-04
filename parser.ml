@@ -19,20 +19,38 @@ module type PARSER = sig
 
   type input
 
-  val parse : input -> 'a t -> ('a, string) result promise
+  val return : 'a -> 'a t
 
   val bind : ('a -> 'b t) -> 'a t -> 'b t
 
   val map : ('a -> 'b) -> 'a t -> 'b t
+
+  val parse : input -> 'a t -> ('a, string) result promise
 
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
 
     val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
 
+    val ( <*> ) : ('a -> 'b) t -> 'a t -> 'b t
+
+    val ( <$> ) : ('a -> 'b) -> 'a t -> 'b t
+
+    val ( <$ ) : 'a -> 'b t -> 'a t
+
     val ( *> ) : _ t -> 'b t -> 'b t
 
+    val ( <* ) : 'a t -> _ t -> 'a t
+
     val ( <|> ) : 'a t -> 'a t -> 'a t
+
+    val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
+
+    val ( and* ) : 'a t -> 'b t -> ('a * 'b) t
+
+    val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
+
+    val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
   end
 
   include module type of Infix
@@ -52,6 +70,9 @@ struct
     -> fail:(pos:int -> string -> unit Input.promise)
     -> unit Input.promise
 
+  let return : 'a -> 'a t =
+   fun v (_input : Input.t) ~pos ~succ ~fail:_ -> succ ~pos v
+
   let bind f p input ~pos ~succ ~fail =
     p input ~pos ~succ:(fun ~pos a -> f a input ~pos ~succ ~fail) ~fail
 
@@ -63,11 +84,29 @@ struct
 
     let ( >>| ) p f = map f p
 
+    let ( <*> ) f q = f >>= fun f' -> map f' q
+
+    let ( <$> ) f p = return f <*> p
+
+    let ( <$ ) v p = (fun _ -> v) <$> p
+
     let ( *> ) : _ t -> 'b t -> 'b t = fun p q -> p >>= fun _ -> q
+
+    let ( <* ) : 'a t -> _ t -> 'a t = fun p q -> p >>= fun a -> a <$ q
 
     let ( <|> ) : 'a t -> 'a t -> 'a t =
      fun p q input ~pos ~succ ~fail ->
       p input ~pos ~succ ~fail:(fun ~pos _s -> q input ~pos ~succ ~fail)
+
+    let both a b = a >>= fun a -> b >>| fun b -> (a, b)
+
+    let ( let* ) = ( >>= )
+
+    let ( and* ) = both
+
+    let ( let+ ) = ( >>| )
+
+    let ( and+ ) = both
   end
 
   include Infix
