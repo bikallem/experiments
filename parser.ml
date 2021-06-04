@@ -3,11 +3,15 @@ module type INPUT = sig
 
   type 'a promise
 
+  val length : t -> int
+
   val return : 'a -> 'a promise
 
   val bind : 'a promise -> ('a -> 'b promise) -> 'b promise
 
-  val read_into : t -> bytes -> int -> int promise
+  val string : t -> pos:int -> len:int -> [ `String of string | `Eof ] promise
+
+  val char : t -> pos:int -> [ `Char of char | `Eof ] promise
 end
 
 module type PARSER = sig
@@ -37,20 +41,16 @@ end
 module Make (Input : INPUT) :
   PARSER with type 'a promise := 'a Input.promise with type input := Input.t =
 struct
-  type input_buffer =
-    { input : Input.t
-    ; buf : bytes
-    ; mutable pos : int
-    }
-
   type 'a t =
-       input_buffer
-    -> succ:('a -> unit Input.promise)
-    -> fail:(string -> unit Input.promise)
+       Input.t
+    -> pos:int
+    -> succ:(pos:int -> 'a -> unit Input.promise)
+    -> fail:(pos:int -> string -> unit Input.promise)
     -> unit Input.promise
 
   let bind : 'a t -> ('a -> 'b t) -> 'b t =
-   fun p f ib ~succ ~fail -> p ib ~succ:(fun a -> f a ib ~succ ~fail) ~fail
+   fun p f ib ~pos ~succ ~fail ->
+    p ib ~pos ~succ:(fun ~pos a -> f a ib ~pos ~succ ~fail) ~fail
 
   module Infix = struct
     let ( >>= ) = bind
@@ -61,34 +61,27 @@ struct
   include Infix
 
   let parse (input : Input.t) (p : 'a t) =
-    let ib = { input; buf = Bytes.create 0; pos = 0 } in
     let v = ref (Error "") in
     Input.bind
-      (p ib
-         ~succ:(fun a -> Input.return (v := Ok a))
-         ~fail:(fun e -> Input.return (v := Error e)))
+      (p input ~pos:0
+         ~succ:(fun ~pos:_ a -> Input.return (v := Ok a))
+         ~fail:(fun ~pos:_ e -> Input.return (v := Error e)))
       (fun () -> Input.return !v)
 
-  let ensure_input : int -> unit t =
-   fun n ib ~succ ~fail ->
-    if n + ib.pos <= Bytes.length ib.buf then
-      succ ()
-    else
-      Input.bind (Input.read_into ib.input ib.buf n) (function
-        | x when Int.equal x n -> succ ()
-        | _ -> fail "not enough input")
+  let input : int -> string t =
+   fun n input ~pos ~succ ~fail ->
+    Input.bind (Input.string input ~pos ~len:n) (function
+      | `String s -> succ ~pos s
+      | _ -> fail ~pos "not enough input")
 
   let char : char -> char t =
    fun c ->
-    let p : char t =
-     fun ib ~succ ~fail ->
-      if Bytes.unsafe_get ib.buf ib.pos = c then (
-        ib.pos <- ib.pos + 1;
-        succ c
-      ) else
-        fail (Printf.sprintf "char %C" c)
-    in
-    ensure_input 1 *> p
+    input 1
+    >>= fun s _ ~pos ~succ ~fail ->
+    if s.[0] = c then
+      succ ~pos:(pos + 1) c
+    else
+      fail ~pos (Printf.sprintf "char %C" c)
 end
 
 module String_parser = Make (struct
@@ -100,9 +93,19 @@ module String_parser = Make (struct
 
   let bind promise f = f promise
 
-  let read_into t buf len =
-    String.blit t 0 buf 0 len;
-    len
+  let length t = String.length t
+
+  let char t ~pos =
+    if pos < String.length t then
+      `Char t.[pos]
+    else
+      `Eof
+
+  let string t ~pos ~len =
+    if pos + len < String.length t then
+      `String (String.sub t pos len)
+    else
+      `Eof
 end)
 
 module Lwt_parser = Make (struct
@@ -114,5 +117,11 @@ module Lwt_parser = Make (struct
 
   let bind = Lwt.bind
 
-  let read_into t buf len = Lwt_io.read_into t buf 0 len
+  let length _t = 0
+
+  let char _t ~pos:_ = Lwt.return `Eof
+
+  let string _t ~pos:_ ~len:_ = Lwt.return `Eof
+
+  (* let read_into t buf len = Lwt_io.read_into t buf 0 len *)
 end)
