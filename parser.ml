@@ -25,6 +25,8 @@ module type PARSER = sig
 
   val bind : ('a -> 'b t) -> 'a t -> 'b t
 
+  val both : 'a t -> 'b t -> ('a * 'b) t
+
   val map : ('a -> 'b) -> 'a t -> 'b t
 
   val map2 : ('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
@@ -33,8 +35,6 @@ module type PARSER = sig
 
   val map4 :
     ('a -> 'b -> 'c -> 'd -> 'e) -> 'a t -> 'b t -> 'c t -> 'd t -> 'e t
-
-  val parse : input -> 'a t -> ('a, string) result promise
 
   module Infix : sig
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
@@ -90,6 +90,8 @@ module type PARSER = sig
         'a t -> 'b t -> 'c t -> 'd t -> f:('a -> 'b -> 'c -> 'd -> 'e) -> 'e t
     end
   end
+
+  val parse : input -> 'a t -> ('a, string) result promise
 
   val advance : int -> unit t
 
