@@ -62,6 +62,8 @@ module type PARSER = sig
     val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
 
     val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
+
+    val ( <?> ) : 'a t -> string -> 'a t
   end
 
   include module type of Infix
@@ -202,6 +204,10 @@ struct
     let ( let+ ) = ( >>| )
 
     let ( and+ ) = both
+
+    let ( <?> ) : 'a t -> string -> 'a t =
+     fun p msg inp ~pos ~succ ~fail ->
+      p inp ~pos ~succ ~fail:(fun ~pos _ -> fail ~pos msg)
   end
 
   include Infix
