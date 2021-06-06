@@ -3,8 +3,6 @@ module type INPUT = sig
 
   type 'a promise
 
-  val length : t -> int
-
   val return : 'a -> 'a promise
 
   val bind : ('a -> 'b promise) -> 'a promise -> 'b promise
@@ -506,8 +504,6 @@ module String_parser = Make (struct
 
   let bind f promise = f promise
 
-  let length t = String.length t
-
   let get t ~pos ~len =
     assert (len > 0);
     assert (pos >= 0);
@@ -525,8 +521,6 @@ module Lwt_parser = Make (struct
   let return = Lwt.return
 
   let bind f p = Lwt.bind p f
-
-  let length _t = 0
 
   let get _t ~pos:_ ~len:_ = Lwt.return `Eof
 end)
