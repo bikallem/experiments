@@ -17,6 +17,8 @@ module type PARSER = sig
 
   type input
 
+  val parse : input -> 'a t -> ('a, string) result promise
+
   val return : 'a -> 'a t
 
   val fail : string -> 'a t
@@ -90,8 +92,6 @@ module type PARSER = sig
         'a t -> 'b t -> 'c t -> 'd t -> f:('a -> 'b -> 'c -> 'd -> 'e) -> 'e t
     end
   end
-
-  val parse : input -> 'a t -> ('a, string) result promise
 
   val advance : int -> unit t
 
