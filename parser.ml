@@ -19,6 +19,8 @@ module type PARSER = sig
 
   val parse : input -> 'a t -> ('a, string) result promise
 
+  (** {2 Monadic operators} *)
+
   val return : 'a -> 'a t
 
   val fail : string -> 'a t
@@ -93,10 +95,6 @@ module type PARSER = sig
     end
   end
 
-  val advance : int -> unit t
-
-  val eoi : unit t
-
   (** {2 Char/String parsers} *)
 
   val peek_char : char t
@@ -149,6 +147,12 @@ module type PARSER = sig
   val take_while : ?sep_by:_ t -> while_:bool t -> 'a t -> 'a list t
 
   val take_between : ?sep_by:_ t -> start:_ t -> end_:_ t -> 'a t -> 'a list t
+
+  (** {2 Others} *)
+
+  val advance : int -> unit t
+
+  val eoi : unit t
 end
 
 module Make (Input : INPUT) :
@@ -160,6 +164,8 @@ struct
     -> succ:(pos:int -> 'a -> unit Input.promise)
     -> fail:(pos:int -> string -> unit Input.promise)
     -> unit Input.promise
+
+  (*+++++ Monadic operators +++++*)
 
   let return : 'a -> 'a t =
    fun v (_input : Input.t) ~pos ~succ ~fail:_ -> succ ~pos v
@@ -257,17 +263,6 @@ struct
              fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)
            | `Eof ->
              fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)))
-
-  let advance : int -> unit t =
-   fun n _inp ~pos ~succ ~fail:_ -> succ ~pos:(pos + n) ()
-
-  let eoi : unit t =
-   fun inp ~pos ~succ ~fail ->
-    Input.(
-      get inp ~pos ~len:1
-      |> bind (function
-           | `String _ -> fail ~pos (Format.sprintf "[eof] pos:%d, not eof" pos)
-           | `Eof -> succ ~pos ()))
 
   (*+++++ String/Char parsers ++++++*)
 
@@ -493,6 +488,18 @@ struct
   let take_between : ?sep_by:_ t -> start:_ t -> end_:_ t -> 'a t -> 'a list t =
    fun ?sep_by ~start ~end_ p ->
     start *> take_while ?sep_by ~while_:(is_not end_) p <* end_
+
+  (*+++++ Others +++++*)
+  let advance : int -> unit t =
+   fun n _inp ~pos ~succ ~fail:_ -> succ ~pos:(pos + n) ()
+
+  let eoi : unit t =
+   fun inp ~pos ~succ ~fail ->
+    Input.(
+      get inp ~pos ~len:1
+      |> bind (function
+           | `String _ -> fail ~pos (Format.sprintf "[eof] pos:%d, not eof" pos)
+           | `Eof -> succ ~pos ()))
 end
 
 module String_parser = Make (struct
