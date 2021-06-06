@@ -9,7 +9,7 @@ module type INPUT = sig
 
   val bind : ('a -> 'b promise) -> 'a promise -> 'b promise
 
-  val string : t -> pos:int -> len:int -> [ `String of string | `Eof ] promise
+  val get : t -> pos:int -> len:int -> [ `String of string | `Eof ] promise
 end
 
 module type PARSER = sig
@@ -108,6 +108,8 @@ module type PARSER = sig
   val string : ?case_sensitive:bool -> string -> string t
 
   val string_of_chars : char list -> string t
+
+  val take_string : int -> string t
 
   (** {2 Alternate parsers} *)
 
@@ -237,7 +239,7 @@ struct
 
   let input : int -> string t =
    fun n input ~pos ~succ ~fail ->
-    Input.string input ~pos ~len:n
+    Input.get input ~pos ~len:n
     |> Input.bind (function
          | `String s when String.length s = n -> succ ~pos s
          | `String _ ->
@@ -245,7 +247,7 @@ struct
          | `Eof ->
            fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n))
 
-  (*+++++ Parsers ++++++*)
+  (*+++++ String/Char parsers ++++++*)
 
   let peek_char : char t =
    fun inp ~pos ~succ ~fail ->
@@ -293,6 +295,9 @@ struct
       fail ~pos (Format.sprintf "[string] %S" s)
 
   let string_of_chars chars = return (String.of_seq @@ List.to_seq chars)
+
+  let take_string : int -> string t =
+   fun n -> input n >>= fun s _ ~pos ~succ ~fail:_ -> succ ~pos:(pos + n) s
 
   (*++++++ Alternates +++++*)
 
@@ -479,7 +484,7 @@ module String_parser = Make (struct
 
   let length t = String.length t
 
-  let string t ~pos ~len =
+  let get t ~pos ~len =
     if pos + len <= String.length t then
       `String (String.sub t pos len)
     else
@@ -497,5 +502,5 @@ module Lwt_parser = Make (struct
 
   let length _t = 0
 
-  let string _t ~pos:_ ~len:_ = Lwt.return `Eof
+  let get _t ~pos:_ ~len:_ = Lwt.return `Eof
 end)
