@@ -91,6 +91,10 @@ module type PARSER = sig
     end
   end
 
+  val advance : int -> unit t
+
+  val eof : unit t
+
   (** {2 Char/String parsers} *)
 
   val peek_char : char t
@@ -238,14 +242,26 @@ struct
     |> Input.bind (fun () -> Input.return !v)
 
   let input : int -> string t =
-   fun n input ~pos ~succ ~fail ->
-    Input.get input ~pos ~len:n
-    |> Input.bind (function
-         | `String s when String.length s = n -> succ ~pos s
-         | `String _ ->
-           fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)
-         | `Eof ->
-           fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n))
+   fun n inp ~pos ~succ ~fail ->
+    Input.(
+      get inp ~pos ~len:n
+      |> bind (function
+           | `String s when String.length s = n -> succ ~pos s
+           | `String _ ->
+             fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)
+           | `Eof ->
+             fail ~pos (Format.sprintf "pos:%d, n:%d not enough input" pos n)))
+
+  let advance : int -> unit t =
+   fun n _inp ~pos ~succ ~fail:_ -> succ ~pos:(pos + n) ()
+
+  let eof : unit t =
+   fun inp ~pos ~succ ~fail ->
+    Input.(
+      get inp ~pos ~len:1
+      |> bind (function
+           | `String _ -> fail ~pos (Format.sprintf "[eof] pos:%d, not eof" pos)
+           | `Eof -> succ ~pos ()))
 
   (*+++++ String/Char parsers ++++++*)
 
@@ -485,6 +501,8 @@ module String_parser = Make (struct
   let length t = String.length t
 
   let get t ~pos ~len =
+    assert (len > 0);
+    assert (pos >= 0);
     if pos + len <= String.length t then
       `String (String.sub t pos len)
     else
