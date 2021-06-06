@@ -21,6 +21,8 @@ module type PARSER = sig
 
   val return : 'a -> 'a t
 
+  val fail : string -> 'a t
+
   val bind : ('a -> 'b t) -> 'a t -> 'b t
 
   val map : ('a -> 'b) -> 'a t -> 'b t
@@ -153,6 +155,8 @@ struct
 
   let return : 'a -> 'a t =
    fun v (_input : Input.t) ~pos ~succ ~fail:_ -> succ ~pos v
+
+  let fail : string -> 'a t = fun msg _inp ~pos ~succ:_ ~fail -> fail ~pos msg
 
   let bind f p input ~pos ~succ ~fail =
     p input ~pos ~succ:(fun ~pos a -> f a input ~pos ~succ ~fail) ~fail
