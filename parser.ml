@@ -97,7 +97,7 @@ module type PARSER = sig
 
   val advance : int -> unit t
 
-  val eof : unit t
+  val eoi : unit t
 
   (** {2 Char/String parsers} *)
 
@@ -263,7 +263,7 @@ struct
   let advance : int -> unit t =
    fun n _inp ~pos ~succ ~fail:_ -> succ ~pos:(pos + n) ()
 
-  let eof : unit t =
+  let eoi : unit t =
    fun inp ~pos ~succ ~fail ->
     Input.(
       get inp ~pos ~len:1
