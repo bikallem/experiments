@@ -24,8 +24,8 @@ let fill_source text =
   in
   loop 0
   *>
-  (* Comment line above (26) and uncomment the line below (28), it works. Why?
-     isn't '*>' and line 28 the same? *)
+  (* Comment line above (26) and uncomment the line below (29), it works. Why?
+     isn't '*>' and line 29 the same? *)
   (* >>= fun _ -> *)
   (bp#close;
    Lwt.return ())
