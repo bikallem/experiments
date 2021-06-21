@@ -1,6 +1,6 @@
 open! Lwt.Infix
 
-let ( *> ) a b = a >>= fun _ -> b
+let ( *> ) a b = Lazy.force a >>= fun _ -> Lazy.force b
 
 let to_dest source =
   let buf = Buffer.create 0 in
@@ -22,13 +22,13 @@ let fill_source text =
     else
       Lwt.return_unit
   in
-  loop 0
-  *>
-  (* Comment line above (26) and uncomment the line below (29), it works. Why?
-     isn't '*>' and line 29 the same? *)
-  (* >>= fun _ -> *)
-  (bp#close;
-   Lwt.return ())
+  lazy (loop 0)
+  *> (* Comment line above (26) and uncomment the line below (29), it works.
+        Why? isn't '*>' and line 29 the same? *)
+     (* >>= fun _ -> *)
+  lazy
+    (bp#close;
+     Lwt.return ())
   >>= fun () -> to_dest src
 
 let () =

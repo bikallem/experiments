@@ -1,4 +1,6 @@
 (executable
  (name lwt1)
  (libraries lwt lwt.unix)
- (modules lwt1))
+ (modules lwt1)
+ (preprocess
+  (pps lwt_ppx)))
