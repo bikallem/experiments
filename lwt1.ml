@@ -24,6 +24,7 @@ let fill_source text =
   in
   loop 0
   *>
+  (* Comment this code and and uncomment the line below, it works. Why?? *)
   (* >>= fun _ -> *)
   (bp#close;
    Lwt.return ())
