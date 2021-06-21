@@ -1,9 +1,4 @@
 (executable
- (name stream)
- (modules stream)
- (libraries streaming))
-
-(executable
- (name parser)
+ (name lwt1)
  (libraries lwt lwt.unix)
- (modules parser))
+ (modules lwt1))
