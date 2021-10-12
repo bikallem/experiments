@@ -1,4 +1,4 @@
-# OCaml effects based examples using effects syntax
+# OCaml syntax based effects samples
 
 ## Preparse OCaml switch:
 
