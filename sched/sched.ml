@@ -3,10 +3,11 @@ open Obj.Effect_handlers.Deep
 
 type _ eff += Fork : (unit -> unit) -> unit eff | Yield : unit eff
 
-let fork f = perform (Fork f)
-let yield () = perform Yield
+let fork : (unit -> unit) -> unit = fun f -> perform (Fork f)
+let yield : unit -> unit = fun () -> perform Yield
 
-let run main =
+let run : (unit -> unit) -> unit =
+ fun main ->
   let run_q = Queue.create () in
   let enqueue k = Queue.push k run_q in
   let dequeue () =
@@ -29,3 +30,22 @@ let run main =
             | _ -> None ) }
   in
   spawn main
+
+let log = Printf.printf
+
+let rec f id depth =
+  log "Starting number %i\n%!" id ;
+  if depth > 0 then begin
+    log "Forking number %i\n%!" ((id * 2) + 1) ;
+    fork (fun () -> f ((id * 2) + 1) (depth - 1)) ;
+    log "Forking number %i\n%!" ((id * 2) + 2) ;
+    fork (fun () -> f ((id * 2) + 2) (depth - 1))
+  end
+  else begin
+    log "Yielding in number %i\n%!" id ;
+    yield () ;
+    log "Resumed number %i\n%!" id
+  end ;
+  log "Finishing number %i\n%!" id
+
+let () = run (fun () -> f 0 2)
