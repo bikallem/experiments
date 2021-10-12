@@ -29,17 +29,17 @@ let run main =
 let log = Printf.printf
 
 let rec f id depth =
-  log "Starting number %i\n%!" id;
+  log "Start (id,depth): %i,%d\n%!" id depth;
   if depth > 0 then begin
-    log "Forking number %i\n%!" (id * 2 + 1);
+    log "Fork (id,depth): %i,%d\n%!" (id * 2 + 1) (depth -1);
     fork (fun () -> f (id * 2 + 1) (depth - 1));
-    log "Forking number %i\n%!" (id * 2 + 2);
+    log "Fork (id,depth): %i,%d\n%!" (id * 2 + 2) (depth -1);
     fork (fun () -> f (id * 2 + 2) (depth - 1))
   end else begin
-    log "Yielding in number %i\n%!" id;
+    log "Yield (id,depth): %i,%i\n%!" id depth;
     yield ();
-    log "Resumed number %i\n%!" id;
+    log "Resume (id,depth): %i,%i\n%!" id depth;
   end;
-  log "Finishing number %i\n%!" id
+  log "Finish (id,depth): %i,%i\n%!" id depth
 
 let () = run (fun () -> f 0 2)
