@@ -34,8 +34,13 @@ let run : (unit -> unit) -> unit =
 
 let log = Printf.printf
 
+(* The number should be 7. Illustrates that mutable variables don't need to coded 
+inside mutexes since only one mutex runs as any one time. *)
+let call_count = ref 0
+
 let rec f id depth =
   log "Start (id,depth): %i,%d\n%!" id depth;
+  incr call_count;
   if depth > 0 then begin
     log "Fork (id,depth): %i,%d\n%!" (id * 2 + 1) (depth -1);
     fork (fun () -> f (id * 2 + 1) (depth - 1));
@@ -48,4 +53,6 @@ let rec f id depth =
   end;
   log "Finish (id,depth): %i,%i\n%!" id depth
 
-let () = run (fun () -> f 0 2)
+let () = 
+  run (fun () -> f 0 2);
+  Printf.printf "call count: %d\n%!" !call_count;
