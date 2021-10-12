@@ -1,2 +1,4 @@
 (executable
- (name sched))
+ (name sched)
+ (modules sched))
+
