@@ -9,24 +9,24 @@ let yield : unit -> unit = fun () -> perform Yield
 let run : (unit -> unit) -> unit =
  fun main ->
   let run_q = Queue.create () in
-  let enqueue k = Queue.push k run_q in
-  let dequeue () =
+  let suspend k = Queue.push k run_q in
+  let run_next () =
     if Queue.is_empty run_q then () else continue (Queue.pop run_q) ()
   in
   let rec spawn f =
     match_with f ()
-      { retc= (fun () -> dequeue ())
+      { retc= (fun () -> run_next ())
       ; exnc=
           (fun e ->
             print_string @@ Printexc.to_string e ;
-            dequeue () )
+            run_next () )
       ; effc=
           (fun (type a) (e : a eff) ->
             match e with
             | Fork f ->
-                Some (fun (k : (a, _) continuation) -> enqueue k ; spawn f)
+                Some (fun (k : (a, _) continuation) -> suspend k ; spawn f)
             | Yield ->
-                Some (fun (k : (a, _) continuation) -> enqueue k ; dequeue ())
+                Some (fun (k : (a, _) continuation) -> suspend k ; run_next ())
             | _ -> None ) }
   in
   spawn main
