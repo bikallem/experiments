@@ -34,16 +34,18 @@ let run : (unit -> unit) -> unit =
 let log = Printf.printf
 
 let rec f id depth =
-  log "%d: Start depth: %d\n%!" id depth ;
+  log "Fibre %d: Start depth: %d\n%!" id depth ;
   if depth > 0 then begin
-    log "%d: Fork (id,depth): %i,%d\n%!" id ((id * 2) + 1) (depth - 1) ;
+    log "Fibre %d: Fork (id,depth): %i,%d\n%!" id ((id * 2) + 1) (depth - 1) ;
     fork (fun () -> f ((id * 2) + 1) (depth - 1)) ;
-    log "%d: Fork (id,depth): %i,%d\n%!" id ((id * 2) + 2) (depth - 1) ;
+    log "Fibre %d: Fork (id,depth): %i,%d\n%!" id ((id * 2) + 2) (depth - 1) ;
     fork (fun () -> f ((id * 2) + 2) (depth - 1))
   end
   else begin
-    log "%d: Yield\n%!" id ; yield () ; log "%d: Resume\n%!" id
+    log "Fibre %d: Yield\n%!" id ;
+    yield () ;
+    log "Fibre %d: Resume\n%!" id
   end ;
-  log "%d: Finish\n%!" id
+  log "Fibre %d: Finish\n%!" id
 
 let () = run (fun () -> f 0 1)
