@@ -67,7 +67,7 @@ let dequeue st =
       let res = Unix.recv fd buf pos len mode in
       continue k res
   | Write (fd, Send (buf, pos, len, mode, k)) ->
-      let res = Unis.send fd buf pos len mode in
+      let res = Unix.send fd buf pos len mode in
       continue k res
 
 let block_accept st fd k = Hashtbl.add st.read_ht fd (Accept k)
@@ -82,4 +82,109 @@ let block_sleep st span k =
   let time = Unix.gettimeofday () +. span in
   Hashtbl.add st.sleep_ht time (Sleep k)
 
+let wakeup st now : bool * float =
+  let l, w, n =
+    Hashtbl.fold
+      (fun t (Sleep k) (l, w, next) ->
+        if t <= now then (
+          enqueue_thread st k ();
+          (t :: l, true, next))
+        else if t < next then (l, w, t)
+        else (l, w, next))
+      st.sleep_ht ([], false, max_float)
+  in
+  List.iter (fun t -> Hashtbl.remove st.sleep_ht t) l;
+  (w, n)
 
+let rec schedule st =
+  if Queue.is_empty st.run_q then
+    if
+      Hashtbl.length st.read_ht = 0
+      && Hashtbl.length st.write_ht = 0
+      && Hashtbl.length st.sleep_ht = 0
+    then () (* We are done. *)
+    else
+      let now = Unix.gettimeofday () in
+      let thrd_has_woken_up, next_wakeup_time = wakeup st now in
+      if thrd_has_woken_up then schedule st
+      else if next_wakeup_time = max_float then perform_io st (-1.)
+      else perform_io st (next_wakeup_time -. now)
+  else dequeue st
+
+and perform_io st timeout =
+  let rd_fds = Hashtbl.fold (fun fd _ acc -> fd :: acc) st.read_ht [] in
+  let wr_fds = Hashtbl.fold (fun fd _ acc -> fd :: acc) st.write_ht [] in
+  let rdy_rd_fds, rdy_wr_fds, _ = Unix.select rd_fds wr_fds [] timeout in
+  let rec resume ht enqueue = function
+    | [] -> ()
+    | x :: xs ->
+        enqueue st x (Hashtbl.find ht x);
+        Hashtbl.remove ht x;
+        resume ht enqueue xs
+  in
+  resume st.read_ht enqueue_read rdy_rd_fds;
+  resume st.write_ht enqueue_write rdy_wr_fds;
+  if timeout > 0. then ignore (wakeup st (Unix.gettimeofday ())) else ();
+  schedule st
+
+let run main =
+  let st = init () in
+  let rec fork st f =
+    match_with f ()
+      {
+        retc = (fun () -> schedule st);
+        exnc =
+          (fun exn ->
+            print_string (Printexc.to_string exn);
+            schedule st);
+        effc =
+          (fun (type a) (e : a eff) ->
+            match e with
+            | Yield ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    enqueue_thread st k ();
+                    schedule st)
+            | Fork f ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    enqueue_thread st k ();
+                    fork st f)
+            | Accept fd ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    if poll_read fd then
+                      let res = Unix.accept fd in
+                      continue k res
+                    else (
+                      block_accept st fd k;
+                      schedule st))
+            | Recv (fd, buf, pos, len, mode) ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    if poll_read fd then
+                      let res = Unix.recv fd buf pos len mode in
+                      continue k res
+                    else (
+                      block_recv st fd buf pos len mode k;
+                      schedule st))
+            | Send (fd, buf, pos, len, mode) ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    if poll_write fd then
+                      let res = Unix.send fd buf pos len mode in
+                      continue k res
+                    else (
+                      block_send st fd buf pos len mode k;
+                      schedule st))
+            | Sleep t ->
+                Some
+                  (fun (k : (a, _) continuation) ->
+                    if t <= 0. then continue k ()
+                    else (
+                      block_sleep st t k;
+                      schedule st))
+            | _ -> None);
+      }
+  in
+  fork st main
