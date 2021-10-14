@@ -1,3 +1,5 @@
+(* Original version : https://github.com/ocaml-multicore/effects-examples/blob/master/aio/aio.ml
+ *)
 open EffectHandlers
 open EffectHandlers.Deep
 
